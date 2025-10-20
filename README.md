@@ -57,6 +57,30 @@ Configuration
     comment trees. Set to 0 to silence messages.
 
 
+Demo
+----
+
+We plan to include a short demo GIF showing progress messages while loading
+stories and comments.
+
+- Placeholder path for the GIF: `screenshots/demo-progress.gif`
+- If you want to record one now, here are two common approaches:
+
+  1) Asciinema + agg (SVG/GIF)
+     - Install: `pip install asciinema svg-term-cli` and `npm i -g agg` (or use
+       your package manager equivalents).
+     - Record: `asciinema rec demo.cast --command "vim -Nu NONE -c 'set rtp+=.' -c 'let g:hackernews_show_progress=1' -c 'HackerNews'"`
+     - Convert: `agg demo.cast screenshots/demo-progress.gif --theme solarized-dark --font-size 14 --width 120 --fps 15`
+
+  2) GUI recorder (Peek, Kap, etc.)
+     - Open a terminal at least 120x35 chars.
+     - Run: `vim -Nu NONE -c 'set rtp+=.' -c 'let g:hackernews_show_progress=1' -c 'HackerNews'`
+     - Start recording before running `:HackerNews` and stop once the list
+       appears and progress messages complete.
+
+Tip: Ensure `let g:hackernews_show_progress=1` so messages are visible.
+
+
 Enhanced Motions
 ----------------
 
