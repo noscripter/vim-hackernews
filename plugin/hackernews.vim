@@ -24,6 +24,11 @@ if !exists("g:hackernews_marks")
     let g:hackernews_marks = {}
 endif
 
+" Force using official HN API (Firebase) instead of third-party API
+if !exists("g:hackernews_use_official_api")
+    let g:hackernews_use_official_api = 0
+endif
+
 
 function! HackerNews(...)
     if a:0 > 0

@@ -26,9 +26,14 @@ Python << EOF
 if 'hackernews' not in sys.modules:
     import hackernews
 else:
-    import imp
     # Reload python module to avoid errors when updating plugin
-    hackernews = imp.reload(hackernews)
+    try:
+        import importlib
+        hackernews = importlib.reload(sys.modules['hackernews'])
+    except Exception:
+        # Fallback for very old Python versions
+        import imp
+        hackernews = imp.reload(sys.modules['hackernews'])
 EOF
 
 

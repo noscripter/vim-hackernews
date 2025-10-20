@@ -15,6 +15,7 @@ import binascii
 import json
 import re
 import textwrap
+import time
 import vim
 import webbrowser
 import sys
@@ -30,6 +31,8 @@ else:
 
 
 API_URL = "http://node-hnapi.herokuapp.com"
+# Official fallback API (Firebase)
+OFFICIAL_API_URL = "https://hacker-news.firebaseio.com/v0"
 MARKDOWN_URL = "http://fuckyeahmarkdown.com/go/?read=1&u="
 
 html = HTMLParser()
@@ -68,6 +71,7 @@ def hex(s):
 
 def main():
     stories = vim.eval("g:hackernews_stories") or "news"
+    use_official = vim.eval("get(g:, 'hackernews_use_official_api', 0)")
     vim.command("edit %s.hackernews" % (stories if stories != "news" else ""))
     vim.command("setlocal noswapfile")
     vim.command("setlocal buftype=nofile")
@@ -81,21 +85,30 @@ def main():
     bwrite("")
 
     try:
-        if stories == "news":
-            news1 = json.loads(urlopen(API_URL+"/news", timeout=5)
-                               .read().decode('utf-8'))
-            news2 = json.loads(urlopen(API_URL+"/news2", timeout=5)
-                               .read().decode('utf-8'))
-            items = news1 + news2
+        if use_official and str(use_official) != '0':
+            items = fetch_official_items(stories)
         else:
-            items = json.loads(urlopen(API_URL+"/"+stories, timeout=5)
-                               .read().decode('utf-8'))
-    except HTTPError:
-        print("HackerNews.vim Error: %s" % str(sys.exc_info()[1].reason))
-        return
-    except:
-        print("HackerNews.vim Error: HTTP Request Timeout")
-        return
+            if stories == "news":
+                news1 = json.loads(urlopen(API_URL+"/news", timeout=5)
+                                   .read().decode('utf-8'))
+                news2 = json.loads(urlopen(API_URL+"/news2", timeout=5)
+                                   .read().decode('utf-8'))
+                items = news1 + news2
+            else:
+                items = json.loads(urlopen(API_URL+"/"+stories, timeout=5)
+                                   .read().decode('utf-8'))
+    except Exception:
+        # Fallback to official API if third-party API fails
+        try:
+            items = fetch_official_items(stories)
+        except Exception:
+            e = sys.exc_info()[1]
+            msg = getattr(e, 'reason', None)
+            if msg:
+                print("HackerNews.vim Error: %s" % str(msg))
+            else:
+                print("HackerNews.vim Error: HTTP Request Timeout")
+            return
 
     for i, item in enumerate(items):
         if 'title' not in item:
@@ -172,11 +185,19 @@ def link(external=False):
             browser.open("https://news.ycombinator.com/item?id="+item_id)
             return
         try:
-            item = json.loads(urlopen(API_URL+"/item/"+item_id,
-                              timeout=5).read().decode('utf-8'))
-        except:
-            print("HackerNews.vim Error: HTTP Request Timeout")
-            return
+            use_official = vim.eval("get(g:, 'hackernews_use_official_api', 0)")
+            if use_official and str(use_official) != '0':
+                item = fetch_official_item(item_id)
+            else:
+                item = json.loads(urlopen(API_URL+"/item/"+item_id,
+                                  timeout=5).read().decode('utf-8'))
+        except Exception:
+            # Fallback to official API for item + comments
+            try:
+                item = fetch_official_item(item_id)
+            except Exception:
+                print("HackerNews.vim Error: HTTP Request Timeout")
+                return
         save_pos()
         vim.command("set syntax=hackernews")
         del vim.current.buffer[:]
@@ -327,3 +348,173 @@ def print_comments(comments, level=0):
         bwrite("")
         if 'comments' in comment:
             print_comments(comment['comments'], level+1)
+
+
+# -------------------------
+# Official API (fallback)
+# -------------------------
+
+def _official_fetch_json(path, timeout=8):
+    return json.loads(urlopen(OFFICIAL_API_URL + path, timeout=timeout)
+                      .read().decode('utf-8'))
+
+
+def _time_ago(ts):
+    try:
+        diff = int(time.time() - int(ts))
+    except Exception:
+        return "just now"
+    units = [
+        (365*24*3600, "year"),
+        (30*24*3600, "month"),
+        (7*24*3600, "week"),
+        (24*3600, "day"),
+        (3600, "hour"),
+        (60, "minute"),
+    ]
+    for seconds, name in units:
+        if diff >= seconds:
+            val = int(diff / seconds)
+            return "%d %s%s ago" % (val, name, "s" if val != 1 else "")
+    return "%d seconds ago" % max(diff, 0)
+
+
+def _domain(url):
+    try:
+        if sys.version_info >= (3, 0):
+            from urllib.parse import urlparse
+        else:
+            from urlparse import urlparse
+        host = urlparse(url).netloc or ""
+        return host[4:] if host.startswith("www.") else host
+    except Exception:
+        return None
+
+
+def _normalize_story(item):
+    """Normalize an official API item to node-hnapi-like shape."""
+    if not item or item.get('deleted') or item.get('dead'):
+        return None
+    typ = item.get('type')
+    story = {
+        'id': item.get('id'),
+        'title': item.get('title', ''),
+        'user': item.get('by', '???'),
+        'time_ago': _time_ago(item.get('time', time.time())),
+        'points': item.get('score', 0),
+        'comments_count': item.get('descendants', 0),
+    }
+    url = item.get('url')
+    if url:
+        story['url'] = url
+        d = _domain(url)
+        if d:
+            story['domain'] = d
+    # Map types to plugin expectations
+    if typ == 'job':
+        story['type'] = 'job'
+    elif typ == 'poll':
+        story['type'] = 'ask'
+    else:
+        story['type'] = 'link' if url else 'ask'
+    return story
+
+
+def fetch_official_items(kind):
+    mapping = {
+        'news': 'topstories',
+        'newest': 'newstories',
+        'best': 'beststories',
+        'show': 'showstories',
+        'ask': 'askstories',
+        'jobs': 'jobstories',
+    }
+    feed = mapping.get(kind, 'topstories')
+    ids = _official_fetch_json('/%s.json' % feed, timeout=8) or []
+    # Limit to avoid long delays; node-hnapi returns ~60 for news/news2
+    limit = 60 if kind in ('news', 'newest', 'best') else 30
+    out = []
+    for iid in ids[:limit]:
+        try:
+            itm = _official_fetch_json('/item/%d.json' % int(iid), timeout=8)
+        except Exception:
+            continue
+        norm = _normalize_story(itm)
+        if norm:
+            out.append(norm)
+    return out
+
+
+def _build_comments(ids, depth=0, depth_limit=6, node_budget=None):
+    # node_budget is [count, max] mutable to track across recursion
+    if node_budget is None:
+        node_budget = [0, 200]
+    comments = []
+    if not ids:
+        return comments
+    if depth > depth_limit:
+        return comments
+    for cid in ids:
+        if node_budget[0] >= node_budget[1]:
+            break
+        try:
+            c = _official_fetch_json('/item/%d.json' % int(cid), timeout=8)
+        except Exception:
+            continue
+        if not c or c.get('deleted') or c.get('dead'):
+            continue
+        node_budget[0] += 1
+        comment = {
+            'id': c.get('id'),
+            'user': c.get('by', '???'),
+            'time_ago': _time_ago(c.get('time', time.time())),
+            'content': c.get('text', '') or '',
+        }
+        kids = c.get('kids') or []
+        if kids:
+            comment['comments'] = _build_comments(
+                kids, depth+1, depth_limit, node_budget
+            )
+        comments.append(comment)
+    return comments
+
+
+def fetch_official_item(item_id):
+    try:
+        iid = int(item_id)
+    except Exception:
+        iid = item_id
+    item = _official_fetch_json('/item/%d.json' % int(iid), timeout=8)
+    if not item:
+        return {}
+    # If this is a comment, normalize minimal fields for print_comments
+    if item.get('type') == 'comment':
+        return {
+            'type': 'comment',
+            'id': item.get('id'),
+            'user': item.get('by', '???'),
+            'time_ago': _time_ago(item.get('time', time.time())),
+            'content': item.get('text', '') or '',
+        }
+
+    norm = _normalize_story(item) or {}
+    # Build poll options if any
+    parts = item.get('parts') or []
+    if parts:
+        poll = []
+        for pid in parts:
+            try:
+                po = _official_fetch_json('/item/%d.json' % int(pid),
+                                          timeout=8)
+            except Exception:
+                continue
+            if not po:
+                continue
+            poll.append({'item': po.get('text', '') or '',
+                         'points': po.get('score', 0)})
+        if poll:
+            norm['poll'] = poll
+    # Build comments tree
+    kids = item.get('kids') or []
+    norm['comments'] = _build_comments(kids)
+    return norm
