@@ -31,13 +31,6 @@ BASIC USAGE                                     *hackernews-usage*
 
 CONFIGURATION
 
-* `g:hackernews_use_official_api`
-  - When set to `1`, the plugin uses the official Hacker News Firebase API for
-    all requests instead of the default third-party API.
-  - When left as `0` (default), the plugin uses the third-party API for speed
-    and automatically falls back to the official API on errors/timeouts.
-  - Example: `let g:hackernews_use_official_api = 1`
-
 * `g:hackernews_show_progress`
   - When set to `1` (default), the plugin shows short progress messages while
     fetching stories/items and building comment trees. Messages appear in the
@@ -70,7 +63,7 @@ Grab the latest version or report a bug on GitHub:
 https://github.com/ryanss/vim-hackernews
 
 Network notes:
-- The plugin primarily queries a third-party JSON API for speed.
-- If that API times out or errors, it automatically falls back to the
-  official Hacker News Firebase API to fetch stories, items, and comments.
-  The fallback may be slower due to additional requests.
+- The plugin uses the official Hacker News Firebase API for all requests
+  (stories, items, comments). This removes the dependency on third-party
+  services and improves reliability. Fetching comment trees may take longer
+  than story lists due to the number of requests involved.

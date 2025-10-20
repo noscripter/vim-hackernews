@@ -29,10 +29,7 @@ if !exists("g:hackernews_show_progress")
     let g:hackernews_show_progress = 1
 endif
 
-" Force using official HN API (Firebase) instead of third-party API
-if !exists("g:hackernews_use_official_api")
-    let g:hackernews_use_official_api = 0
-endif
+" The plugin always uses the official HN API (Firebase)
 
 
 function! HackerNews(...)

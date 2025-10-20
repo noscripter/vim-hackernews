@@ -31,8 +31,8 @@ else:
     from urllib2 import urlopen, HTTPError
 
 
-API_URL = "http://node-hnapi.herokuapp.com"
-# Official fallback API (Firebase)
+API_URL = "http://node-hnapi.herokuapp.com"  # unused; kept for backward refs
+# Official API (Firebase)
 OFFICIAL_API_URL = "https://hacker-news.firebaseio.com/v0"
 MARKDOWN_URL = "http://fuckyeahmarkdown.com/go/?read=1&u="
 
@@ -73,7 +73,6 @@ def hex(s):
 
 def main():
     stories = vim.eval("g:hackernews_stories") or "news"
-    use_official = vim.eval("get(g:, 'hackernews_use_official_api', 0)")
     vim.command("edit %s.hackernews" % (stories if stories != "news" else ""))
     vim.command("setlocal noswapfile")
     vim.command("setlocal buftype=nofile")
@@ -86,45 +85,20 @@ def main():
     bwrite("└───┘")
     bwrite("")
 
-    official_used = False
-    # Progress banner
-    if use_official and str(use_official) != '0':
-        _progress('Loading stories (Official API) ...')
-    else:
-        _progress('Loading stories (Third-party API) ...')
+    # Always use the official API
+    _progress('Loading stories (Official API) ...')
     try:
-        if use_official and str(use_official) != '0':
-            items = fetch_official_items(stories)
-            official_used = True
-        else:
-            if stories == "news":
-                _progress('Fetching front page 1/2 ...')
-                news1 = json.loads(urlopen(API_URL+"/news", timeout=5)
-                                   .read().decode('utf-8'))
-                _progress('Fetching front page 2/2 ...')
-                news2 = json.loads(urlopen(API_URL+"/news2", timeout=5)
-                                   .read().decode('utf-8'))
-                items = news1 + news2
-            else:
-                _progress('Fetching stories: ' + stories + ' ...')
-                items = json.loads(urlopen(API_URL+"/"+stories, timeout=5)
-                                   .read().decode('utf-8'))
+        items = fetch_official_items(stories)
     except Exception:
-        # Fallback to official API if third-party API fails
-        try:
-            _progress('Primary failed. Falling back to Official API ...')
-            items = fetch_official_items(stories)
-            official_used = True
-        except Exception:
-            e = sys.exc_info()[1]
-            msg = getattr(e, 'reason', None)
-            if msg:
-                print("HackerNews.vim Error: %s" % str(msg))
-            else:
-                print("HackerNews.vim Error: HTTP Request Timeout")
-            return
+        e = sys.exc_info()[1]
+        msg = getattr(e, 'reason', None)
+        if msg:
+            print("HackerNews.vim Error: %s" % str(msg))
+        else:
+            print("HackerNews.vim Error: HTTP Request Timeout")
+        return
 
-    _notify_api_used(official_used)
+    _notify_api_used(True)
     _progress('Loaded %d stories' % len(items))
 
     for i, item in enumerate(items):
@@ -202,25 +176,12 @@ def link(external=False):
             browser.open("https://news.ycombinator.com/item?id="+item_id)
             return
         try:
-            use_official = vim.eval("get(g:, 'hackernews_use_official_api', 0)")
-            official_used = False
-            _progress('Loading item %s ...' % item_id)
-            if use_official and str(use_official) != '0':
-                item = fetch_official_item(item_id)
-                official_used = True
-            else:
-                item = json.loads(urlopen(API_URL+"/item/"+item_id,
-                                  timeout=5).read().decode('utf-8'))
+            _progress('Loading item %s (Official API) ...' % item_id)
+            item = fetch_official_item(item_id)
         except Exception:
-            # Fallback to official API for item + comments
-            try:
-                _progress('Primary failed. Falling back to Official API ...')
-                item = fetch_official_item(item_id)
-                official_used = True
-            except Exception:
-                print("HackerNews.vim Error: HTTP Request Timeout")
-                return
-        _notify_api_used(official_used)
+            print("HackerNews.vim Error: HTTP Request Timeout")
+            return
+        _notify_api_used(True)
         _progress('Loaded item %s' % item_id)
         save_pos()
         vim.command("set syntax=hackernews")
