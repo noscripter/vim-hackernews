@@ -9,7 +9,6 @@
 #  License: MIT (see LICENSE file)
 #  Version: 0.3-dev
 
-
 from __future__ import print_function
 import binascii
 import json
@@ -18,8 +17,8 @@ import textwrap
 import time
 import vim
 import webbrowser
-import warnings
 import sys
+
 if sys.version_info >= (3, 0):
     from html.parser import HTMLParser
     from urllib.request import urlopen
@@ -36,7 +35,6 @@ OFFICIAL_API_URL = "https://hacker-news.firebaseio.com/v0"
 MARKDOWN_URL = "http://fuckyeahmarkdown.com/go/?read=1&u="
 
 html = HTMLParser()
-warnings.filterwarnings('ignore', category=SyntaxWarning)
 
 
 def bwrite(s):
@@ -70,6 +68,24 @@ def hex(s):
     return binascii.hexlify(s)
 
 
+def _notify_api_used():
+    try:
+        vim.command("silent! echomsg 'HackerNews: using Official API'")
+    except Exception:
+        pass
+
+
+def _progress(msg):
+    try:
+        if str(vim.eval("get(g:, 'hackernews_show_progress', 1)")) == '0':
+            return
+        msg = 'HackerNews: ' + msg
+        vim.command("echo '%s'" % msg.replace("'", "''"))
+        vim.command("redraw")
+    except Exception:
+        pass
+
+
 def main():
     stories = vim.eval("g:hackernews_stories") or "news"
     vim.command("edit %s.hackernews" % (stories if stories != "news" else ""))
@@ -84,7 +100,6 @@ def main():
     bwrite("└───┘")
     bwrite("")
 
-    # Always use the official API
     _progress('Loading stories (Official API) ...')
     try:
         items = fetch_official_items(stories)
@@ -97,7 +112,7 @@ def main():
             print("HackerNews.vim Error: HTTP Request Timeout")
         return
 
-    _notify_api_used(True)
+    _notify_api_used()
     _progress('Loaded %d stories' % len(items))
 
     for i, item in enumerate(items):
@@ -106,7 +121,7 @@ def main():
         if 'domain' in item:
             line = "%s%d. %s (%s) [%s]%s"
             line %= (" " if i+1 < 10 else "", i+1, item['title'],
-                     item['domain'], item['url'], unichr(160))
+                     item['domain'], item.get('url', ''), unichr(160))
             bwrite(line)
         else:
             line = "%s%d. %s [%d]"
@@ -114,12 +129,13 @@ def main():
             bwrite(line)
         if item['type'] in ("link", "ask"):
             line = "%s%d points by %s %s | %d comments [%s]"
-            line %= (" "*4, item['points'], item['user'], item['time_ago'],
-                     item['comments_count'], str(item['id']))
+            line %= (" "*4, item.get('points', 0), item.get('user', '???'),
+                     item.get('time_ago', ''), item.get('comments_count', 0),
+                     str(item['id']))
             bwrite(line)
         elif item['type'] == "job":
             line = "%s%s [%d]"
-            line %= (" "*4, item['time_ago'], item['id'])
+            line %= (" "*4, item.get('time_ago', ''), item['id'])
             bwrite(line)
         bwrite("")
     vim.command("setlocal undolevels=100")
@@ -180,8 +196,6 @@ def link(external=False):
         except Exception:
             print("HackerNews.vim Error: HTTP Request Timeout")
             return
-        _notify_api_used(True)
-        _progress('Loaded item %s' % item_id)
         save_pos()
         vim.command("set syntax=hackernews")
         del vim.current.buffer[:]
@@ -193,20 +207,21 @@ def link(external=False):
             if item.get('comments_count', None) is not None \
                     and item['type'] != "job":
                 bwrite("%d points by %s %s | %d comments"
-                       % (item['points'], item['user'], item['time_ago'],
-                          item['comments_count']))
+                       % (item.get('points', 0), item.get('user', '???'),
+                          item.get('time_ago', ''), item.get('comments_count', 0)))
             else:
-                bwrite(item['time_ago'])
+                bwrite(item.get('time_ago', ''))
             if 'url' in item and item['url'].find(item_id) < 0:
                 bwrite("[%s]" % item['url'])
             else:
                 bwrite("[http://news.ycombinator.com/item?id=%s]" % item_id)
             if 'content' in item:
                 bwrite("")
+                bwrite("")
                 print_comments([dict(content=item['content'])])
             if 'poll' in item:
                 bwrite("")
-                max_score = max((c['points'] for c in item['poll']))
+                max_score = max((c['points'] for c in item['poll'])) or 1
                 for c in item['poll']:
                     bwrite("%s (%d points)"
                            % (html.unescape(c['item']), c['points']))
@@ -215,17 +230,17 @@ def link(external=False):
                     bwrite("")
             bwrite("")
             bwrite("")
-        if item['type'] == "comment":
+        if item.get('type') == "comment":
             item['level'] = 0
             print_comments([item])
         else:
-            print_comments(item['comments'])
+            print_comments(item.get('comments', []))
         # Prevent syntax issues in long comment threads with code blocks
         vim.command("syntax sync fromstart")
         # Highlight OP username in comment titles
         if 'level' not in item:
             vim.command("syntax clear Question")
-        vim.command("syntax match Question /%s/ contained" % item['user'])
+        vim.command("syntax match Question /%s/ contained" % item.get('user', ''))
 
     elif url:
         if external:
@@ -238,7 +253,7 @@ def link(external=False):
         except HTTPError:
             print("HackerNews.vim Error: %s" % str(sys.exc_info()[1][0]))
             return
-        except:
+        except Exception:
             print("HackerNews.vim Error: HTTP Request Timeout")
             return
         # Wrap plain URLs as [http...] to match buffer link detection
@@ -278,7 +293,7 @@ def print_comments(comments, level=0):
             # This is a comment (not content) so add comment header
             bwrite("%sComment by %s %s: [%s]"
                    % (" "*level*4, comment.get('user', '???'),
-                      comment['time_ago'], comment['id']))
+                      comment.get('time_ago', ''), comment.get('id', 0)))
         if not comment.get('content', False):
             bwrite("")
             bwrite("")
@@ -292,9 +307,10 @@ def print_comments(comments, level=0):
             # Extract code block before textwrap to conserve whitespace
             code = None
             if p.find("<code>") >= 0:
-                m = re.search("<pre><code>([\S\s]*?)</code></pre>", p)
-                code = m.group(1)
-                p = p.replace(m.group(0), "!CODE!")
+                m = re.search(r"<pre><code>([\S\s]*?)</code></pre>", p)
+                if m:
+                    code = m.group(1)
+                    p = p.replace(m.group(0), "!CODE!")
 
             # Convert <a href="http://url/">Text</a> tags
             # to markdown equivalent: (Text)[http://url/]
@@ -306,90 +322,6 @@ def print_comments(comments, level=0):
                               section)
                 if m:
                     # Do not bother with anchor text if it is same as href url
-                    if m.group(1)[:20] == m.group(2)[:20]:
-                        p = p.replace(m.group(0), "[%s]" % m.group(1))
-                    else:
-                        p = p.replace(m.group(0),
-                                      "(%s)[%s]" % (m.group(2), m.group(1)))
-                    s = p.find("a>")
-                else:
-                    s = p.find("a>", s)
-
-            contents = textwrap.wrap(p, width=80,
-                                     initial_indent=" "*4*level,
-                                     subsequent_indent=" "*4*level)
-            for line in contents:
-                if line.find("!CODE!") >= 0:
-                    bwrite(unichr(160))
-                    for c in code.split("\n"):
-                        if c.strip():
-                            bwrite(" "*4*level + c)
-                    bwrite(unichr(160))
-                    line = " "*4*level + line.replace("!CODE!", "").strip()
-                if line.strip():
-                    bwrite(line)
-            if contents and line.strip():
-                bwrite("")
-        bwrite("")
-        if 'comments' in comment:
-            print_comments(comment['comments'], level+1)
-
-
-# -------------------------
-# Official API
-# -------------------------
-
-def _notify_api_used(official=True):
-    try:
-        # Always official now; keep param for compatibility
-        msg = 'HackerNews: using Official API'
-        # Use echomsg so it lands in :messages; avoid breaking redraws
-        vim.command("silent! echomsg '%s'" % msg.replace("'", "''"))
-    except Exception:
-        pass
-
-def _progress(msg):
-    try:
-        if str(vim.eval("get(g:, 'hackernews_show_progress', 1)")) == '0':
-            return
-        msg = 'HackerNews: ' + msg
-        vim.command("echo '%s'" % msg.replace("'", "''"))
-        vim.command("redraw")
-    except Exception:
-        pass
-
-
-# Override print_comments to avoid regex escape warnings and keep behavior.
-def print_comments(comments, level=0):
-    for comment in comments:
-        if 'level' in comment:
-            bwrite("%sComment by %s %s: [%s]"
-                   % (" "*level*4, comment.get('user', '???'),
-                      comment['time_ago'], comment['id']))
-        if not comment.get('content', False):
-            bwrite("")
-            bwrite("")
-            continue
-        for p in comment['content'].split("<p>"):
-            if not p:
-                continue
-            p = html.unescape(p)
-            p = p.replace("<i>", "_").replace("</i>", "_")
-
-            code = None
-            if p.find("<code>") >= 0:
-                m = re.search(r"<pre><code>([\S\s]*?)</code></pre>", p)
-                if m:
-                    code = m.group(1)
-                    p = p.replace(m.group(0), "!CODE!")
-
-            s = p.find("a>")
-            while s > 0:
-                s += 2
-                section = p[:s]
-                m = re.search(r"<a.*href=[\"\']([^\"\']*)[\"\'].*>(.*)</a>",
-                              section)
-                if m:
                     if m.group(1)[:20] == m.group(2)[:20]:
                         p = p.replace(m.group(0), "[%s]" % m.group(1))
                     else:
@@ -417,6 +349,7 @@ def print_comments(comments, level=0):
         bwrite("")
         if 'comments' in comment:
             print_comments(comment['comments'], level+1)
+
 
 def _official_fetch_json(path, timeout=8):
     return json.loads(urlopen(OFFICIAL_API_URL + path, timeout=timeout)
@@ -592,3 +525,4 @@ def fetch_official_item(item_id):
     kids = item.get('kids') or []
     norm['comments'] = _build_comments(kids)
     return norm
+
