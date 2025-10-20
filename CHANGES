@@ -10,6 +10,8 @@ Version 0.3-dev
 - Add progress messages while fetching stories/items/comments
 - Add option `g:hackernews_show_progress` (default: on)
 - Improve Python 3 reloading compatibility
+- Update docs to reflect supported lists (top, ask, show, jobs, best, newest)
+  and remove references to deprecated lists (active, shownew, noobstories)
 
 
 Version 0.2
