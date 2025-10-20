@@ -18,6 +18,7 @@ import textwrap
 import time
 import vim
 import webbrowser
+import warnings
 import sys
 if sys.version_info >= (3, 0):
     from html.parser import HTMLParser
@@ -36,6 +37,7 @@ OFFICIAL_API_URL = "https://hacker-news.firebaseio.com/v0"
 MARKDOWN_URL = "http://fuckyeahmarkdown.com/go/?read=1&u="
 
 html = HTMLParser()
+warnings.filterwarnings('ignore', category=SyntaxWarning)
 
 
 def bwrite(s):
@@ -266,7 +268,8 @@ def link(external=False):
         except:
             print("HackerNews.vim Error: HTTP Request Timeout")
             return
-        content = re.sub(r"(http\S+?)([\<\>\s\n])", "[\g<1>]\g<2>", content)
+        # Wrap plain URLs as [http...] to match buffer link detection
+        content = re.sub(r"(http\S+?)([<>\s\n])", r"[\g<1>]\g<2>", content)
         save_pos()
         vim.command("set syntax=markdown")
         del vim.current.buffer[:]
@@ -370,6 +373,66 @@ def _notify_api_used(official):
         vim.command("silent! echomsg '%s'" % msg.replace("'", "''"))
     except Exception:
         pass
+
+
+# Override print_comments to avoid regex escape warnings and keep behavior.
+def print_comments(comments, level=0):
+    for comment in comments:
+        if 'level' in comment:
+            bwrite("%sComment by %s %s: [%s]"
+                   % (" "*level*4, comment.get('user', '???'),
+                      comment['time_ago'], comment['id']))
+        if not comment.get('content', False):
+            bwrite("")
+            bwrite("")
+            continue
+        for p in comment['content'].split("<p>"):
+            if not p:
+                continue
+            p = html.unescape(p)
+            p = p.replace("<i>", "_").replace("</i>", "_")
+
+            code = None
+            if p.find("<code>") >= 0:
+                m = re.search(r"<pre><code>([\S\s]*?)</code></pre>", p)
+                if m:
+                    code = m.group(1)
+                    p = p.replace(m.group(0), "!CODE!")
+
+            s = p.find("a>")
+            while s > 0:
+                s += 2
+                section = p[:s]
+                m = re.search(r"<a.*href=[\"\']([^\"\']*)[\"\'].*>(.*)</a>",
+                              section)
+                if m:
+                    if m.group(1)[:20] == m.group(2)[:20]:
+                        p = p.replace(m.group(0), "[%s]" % m.group(1))
+                    else:
+                        p = p.replace(m.group(0),
+                                      "(%s)[%s]" % (m.group(2), m.group(1)))
+                    s = p.find("a>")
+                else:
+                    s = p.find("a>", s)
+
+            contents = textwrap.wrap(p, width=80,
+                                     initial_indent=" "*4*level,
+                                     subsequent_indent=" "*4*level)
+            for line in contents:
+                if line.find("!CODE!") >= 0 and code is not None:
+                    bwrite(unichr(160))
+                    for c in code.split("\n"):
+                        if c.strip():
+                            bwrite(" "*4*level + c)
+                    bwrite(unichr(160))
+                    line = " "*4*level + line.replace("!CODE!", "").strip()
+                if line.strip():
+                    bwrite(line)
+            if contents and line.strip():
+                bwrite("")
+        bwrite("")
+        if 'comments' in comment:
+            print_comments(comment['comments'], level+1)
 
 def _official_fetch_json(path, timeout=8):
     return json.loads(urlopen(OFFICIAL_API_URL + path, timeout=timeout)
