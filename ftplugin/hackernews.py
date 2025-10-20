@@ -84,9 +84,11 @@ def main():
     bwrite("└───┘")
     bwrite("")
 
+    official_used = False
     try:
         if use_official and str(use_official) != '0':
             items = fetch_official_items(stories)
+            official_used = True
         else:
             if stories == "news":
                 news1 = json.loads(urlopen(API_URL+"/news", timeout=5)
@@ -101,6 +103,7 @@ def main():
         # Fallback to official API if third-party API fails
         try:
             items = fetch_official_items(stories)
+            official_used = True
         except Exception:
             e = sys.exc_info()[1]
             msg = getattr(e, 'reason', None)
@@ -109,6 +112,8 @@ def main():
             else:
                 print("HackerNews.vim Error: HTTP Request Timeout")
             return
+
+    _notify_api_used(official_used)
 
     for i, item in enumerate(items):
         if 'title' not in item:
@@ -186,8 +191,10 @@ def link(external=False):
             return
         try:
             use_official = vim.eval("get(g:, 'hackernews_use_official_api', 0)")
+            official_used = False
             if use_official and str(use_official) != '0':
                 item = fetch_official_item(item_id)
+                official_used = True
             else:
                 item = json.loads(urlopen(API_URL+"/item/"+item_id,
                                   timeout=5).read().decode('utf-8'))
@@ -195,9 +202,11 @@ def link(external=False):
             # Fallback to official API for item + comments
             try:
                 item = fetch_official_item(item_id)
+                official_used = True
             except Exception:
                 print("HackerNews.vim Error: HTTP Request Timeout")
                 return
+        _notify_api_used(official_used)
         save_pos()
         vim.command("set syntax=hackernews")
         del vim.current.buffer[:]
@@ -353,6 +362,14 @@ def print_comments(comments, level=0):
 # -------------------------
 # Official API (fallback)
 # -------------------------
+
+def _notify_api_used(official):
+    try:
+        msg = 'HackerNews: using ' + ('Official API' if official else 'Third-party API')
+        # Use echomsg so it lands in :messages; avoid breaking redraws
+        vim.command("silent! echomsg '%s'" % msg.replace("'", "''"))
+    except Exception:
+        pass
 
 def _official_fetch_json(path, timeout=8):
     return json.loads(urlopen(OFFICIAL_API_URL + path, timeout=timeout)
