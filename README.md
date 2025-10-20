@@ -1,4 +1,4 @@
-vim-hackernews [![Build Status](https://img.shields.io/travis/ryanss/vim-hackernews.svg)](https://travis-ci.org/ryanss/vim-hackernews) [![Version](https://img.shields.io/badge/version-0.2-orange.svg)](https://github.com/ryanss/vim-hackernews/releases/tag/v0.2) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/ryanss/vim-hackernews/raw/master/LICENSE)
+vim-hackernews [![Build Status](https://img.shields.io/travis/ryanss/vim-hackernews.svg)](https://travis-ci.org/ryanss/vim-hackernews) [![Version](https://img.shields.io/badge/version-0.3--dev-orange.svg)](https://github.com/ryanss/vim-hackernews/blob/master/CHANGES) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/ryanss/vim-hackernews/raw/master/LICENSE)
 ==============
 
 Browse [Hacker News](https://news.ycombinator.com) inside Vim.
@@ -32,6 +32,21 @@ Basic Usage
 * Press lowercase `u` to go back
 * Press `Ctrl+r` to go forward
 * Execute the `:bd` command to close and remove the Hacker News buffer
+
+
+Why the switch to the Official API?
+-----------------------------------
+
+We switched from a third-party API to the official Hacker News Firebase API to
+improve reliability and reduce external dependencies.
+
+- Reliability: avoids frequent outages/timeouts seen with the previous API.
+- Accuracy: works directly with canonical HN items and comment trees.
+- Transparency: public, well-documented endpoints maintained by HN.
+
+Note: fetching deep comment trees can be slower because the official API
+requires multiple requests. The plugin shows progress messages by default
+(`g:hackernews_show_progress`) so you can see what’s happening.
 
 
 Configuration
