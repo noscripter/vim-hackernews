@@ -87,23 +87,32 @@ def main():
     bwrite("")
 
     official_used = False
+    # Progress banner
+    if use_official and str(use_official) != '0':
+        _progress('Loading stories (Official API) ...')
+    else:
+        _progress('Loading stories (Third-party API) ...')
     try:
         if use_official and str(use_official) != '0':
             items = fetch_official_items(stories)
             official_used = True
         else:
             if stories == "news":
+                _progress('Fetching front page 1/2 ...')
                 news1 = json.loads(urlopen(API_URL+"/news", timeout=5)
                                    .read().decode('utf-8'))
+                _progress('Fetching front page 2/2 ...')
                 news2 = json.loads(urlopen(API_URL+"/news2", timeout=5)
                                    .read().decode('utf-8'))
                 items = news1 + news2
             else:
+                _progress('Fetching stories: ' + stories + ' ...')
                 items = json.loads(urlopen(API_URL+"/"+stories, timeout=5)
                                    .read().decode('utf-8'))
     except Exception:
         # Fallback to official API if third-party API fails
         try:
+            _progress('Primary failed. Falling back to Official API ...')
             items = fetch_official_items(stories)
             official_used = True
         except Exception:
@@ -116,6 +125,7 @@ def main():
             return
 
     _notify_api_used(official_used)
+    _progress('Loaded %d stories' % len(items))
 
     for i, item in enumerate(items):
         if 'title' not in item:
@@ -194,6 +204,7 @@ def link(external=False):
         try:
             use_official = vim.eval("get(g:, 'hackernews_use_official_api', 0)")
             official_used = False
+            _progress('Loading item %s ...' % item_id)
             if use_official and str(use_official) != '0':
                 item = fetch_official_item(item_id)
                 official_used = True
@@ -203,12 +214,14 @@ def link(external=False):
         except Exception:
             # Fallback to official API for item + comments
             try:
+                _progress('Primary failed. Falling back to Official API ...')
                 item = fetch_official_item(item_id)
                 official_used = True
             except Exception:
                 print("HackerNews.vim Error: HTTP Request Timeout")
                 return
         _notify_api_used(official_used)
+        _progress('Loaded item %s' % item_id)
         save_pos()
         vim.command("set syntax=hackernews")
         del vim.current.buffer[:]
@@ -374,6 +387,16 @@ def _notify_api_used(official):
     except Exception:
         pass
 
+def _progress(msg):
+    try:
+        if str(vim.eval("get(g:, 'hackernews_show_progress', 1)")) == '0':
+            return
+        msg = 'HackerNews: ' + msg
+        vim.command("echo '%s'" % msg.replace("'", "''"))
+        vim.command("redraw")
+    except Exception:
+        pass
+
 
 # Override print_comments to avoid regex escape warnings and keep behavior.
 def print_comments(comments, level=0):
@@ -510,10 +533,14 @@ def fetch_official_items(kind):
         'jobs': 'jobstories',
     }
     feed = mapping.get(kind, 'topstories')
+    _progress('Official: fetching %s ids ...' % feed)
     ids = _official_fetch_json('/%s.json' % feed, timeout=8) or []
     # Limit to avoid long delays; node-hnapi returns ~60 for news/news2
     limit = 60 if kind in ('news', 'newest', 'best') else 30
     out = []
+    total = min(len(ids), limit)
+    if total:
+        _progress('Official: fetching %d items ...' % total)
     for iid in ids[:limit]:
         try:
             itm = _official_fetch_json('/item/%d.json' % int(iid), timeout=8)
@@ -522,6 +549,8 @@ def fetch_official_items(kind):
         norm = _normalize_story(itm)
         if norm:
             out.append(norm)
+        if total and len(out) % 10 == 0:
+            _progress('Official: fetched %d/%d items ...' % (len(out), total))
     return out
 
 
@@ -534,6 +563,8 @@ def _build_comments(ids, depth=0, depth_limit=6, node_budget=None):
         return comments
     if depth > depth_limit:
         return comments
+    if depth == 0:
+        _progress('Official: fetching comments ...')
     for cid in ids:
         if node_budget[0] >= node_budget[1]:
             break
@@ -556,6 +587,8 @@ def _build_comments(ids, depth=0, depth_limit=6, node_budget=None):
                 kids, depth+1, depth_limit, node_budget
             )
         comments.append(comment)
+        if depth == 0 and node_budget[0] % 20 == 0:
+            _progress('Official: fetched %d comments ...' % node_budget[0])
     return comments
 
 

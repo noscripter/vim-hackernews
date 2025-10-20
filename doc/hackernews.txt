@@ -38,6 +38,12 @@ CONFIGURATION
     and automatically falls back to the official API on errors/timeouts.
   - Example: `let g:hackernews_use_official_api = 1`
 
+* `g:hackernews_show_progress`
+  - When set to `1` (default), the plugin shows short progress messages while
+    fetching stories/items and building comment trees. Messages appear in the
+    command area and in `:messages`.
+  - Set to `0` to silence progress messages.
+
 
 ENHANCED MOTIONS                                *hackernews-motions*
 
