@@ -56,6 +56,14 @@ Configuration
   - Show short progress messages while fetching stories/items and building
     comment trees. Set to 0 to silence messages.
 
+- `g:hackernews_max_items`
+  - Max stories fetched per list. Defaults to ~60 for top/newest/best, ~30 for
+    others.
+
+- `g:hackernews_concurrency`
+  - Number of parallel requests when fetching story details from the official
+    API. Default 12.
+
 
 Demo
 ----

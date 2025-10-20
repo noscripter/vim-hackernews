@@ -18,6 +18,12 @@ import time
 import vim
 import webbrowser
 import sys
+import threading
+
+if sys.version_info >= (3, 0):
+    from queue import Queue
+else:
+    from Queue import Queue
 
 if sys.version_info >= (3, 0):
     from html.parser import HTMLParser
@@ -429,23 +435,66 @@ def fetch_official_items(kind):
     feed = mapping.get(kind, 'topstories')
     _progress('Official: fetching %s ids ...' % feed)
     ids = _official_fetch_json('/%s.json' % feed, timeout=8) or []
-    # Limit to avoid long delays; news/news2 pages typically list ~60 stories
-    limit = 60 if kind in ('news', 'newest', 'best') else 30
-    out = []
-    total = min(len(ids), limit)
+    # Limit to avoid long delays; default mirrors prior behavior
+    default_limit = 60 if kind in ('news', 'newest', 'best') else 30
+    try:
+        user_limit = int(vim.eval("get(g:, 'hackernews_max_items', %d)" % default_limit))
+    except Exception:
+        user_limit = default_limit
+    limit = max(1, min(user_limit, len(ids)))
+    total = limit
     if total:
         _progress('Official: fetching %d items ...' % total)
-    for iid in ids[:limit]:
-        try:
-            itm = _official_fetch_json('/item/%d.json' % int(iid), timeout=8)
-        except Exception:
-            continue
-        norm = _normalize_story(itm)
-        if norm:
-            out.append(norm)
-        if total and len(out) % 10 == 0:
-            _progress('Official: fetched %d/%d items ...' % (len(out), total))
-    return out
+    return _parallel_fetch_items(ids, limit)
+
+
+def _parallel_fetch_items(ids, limit):
+    try:
+        concurrency = int(vim.eval("get(g:, 'hackernews_concurrency', 12)"))
+    except Exception:
+        concurrency = 12
+    concurrency = max(1, min(concurrency, 64))
+
+    q = Queue()
+    results = [None] * limit
+    lock = threading.Lock()
+    done = [0]
+
+    def worker():
+        while True:
+            item = q.get()
+            if item is None:
+                q.task_done()
+                return
+            i, iid = item
+            norm = None
+            try:
+                itm = _official_fetch_json('/item/%d.json' % int(iid), timeout=8)
+                norm = _normalize_story(itm)
+            except Exception:
+                norm = None
+            results[i] = norm
+            with lock:
+                done[0] += 1
+                if done[0] % 10 == 0:
+                    _progress('Official: fetched %d/%d items ...' % (done[0], limit))
+            q.task_done()
+
+    threads = []
+    for _ in range(min(concurrency, limit)):
+        t = threading.Thread(target=worker)
+        t.daemon = True
+        t.start()
+        threads.append(t)
+
+    for i, iid in enumerate(ids[:limit]):
+        q.put((i, iid))
+    # Add sentinels
+    for _ in threads:
+        q.put(None)
+    q.join()
+    # Assemble in original order, dropping missing
+    return [r for r in results if r]
 
 
 def _build_comments(ids, depth=0, depth_limit=6, node_budget=None):
@@ -525,4 +574,3 @@ def fetch_official_item(item_id):
     kids = item.get('kids') or []
     norm['comments'] = _build_comments(kids)
     return norm
-

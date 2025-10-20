@@ -34,6 +34,16 @@ CONFIGURATION
     command area and in `:messages`.
   - Set to `0` to silence progress messages.
 
+* `g:hackernews_max_items`
+  - Maximum number of stories fetched for the current list. Defaults to `60`
+    for `news/newest/best` and `30` for others. Set to a lower value if your
+    connection is slow, or a higher value if you want more items.
+
+* `g:hackernews_concurrency`
+  - Number of parallel requests used when fetching story details from the
+    official API. Default `12`. Increase to speed up on fast networks; lower on
+    slower or rate-limited networks.
+
 
 ENHANCED MOTIONS                                *hackernews-motions*
 

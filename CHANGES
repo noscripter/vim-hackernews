@@ -9,6 +9,9 @@ Version 0.3-dev
   (stories/items/comments); remove dependency on third-party API
 - Add progress messages while fetching stories/items/comments
 - Add option `g:hackernews_show_progress` (default: on)
+- Speed: parallelize story detail fetches with configurable concurrency
+  (`g:hackernews_concurrency`, default 12) and configurable max items per list
+  (`g:hackernews_max_items`).
 - Improve Python 3 reloading compatibility
 - Update docs to reflect supported lists (top, ask, show, jobs, best, newest)
   and remove references to deprecated lists (active, shownew, noobstories)
