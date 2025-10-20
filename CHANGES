@@ -2,6 +2,16 @@ Vim-HackerNews Changelog
 ========================
 
 
+Version 0.3-dev
+---------------
+
+- Switch to the official Hacker News Firebase API for all requests
+  (stories/items/comments); remove dependency on third-party API
+- Add progress messages while fetching stories/items/comments
+- Add option `g:hackernews_show_progress` (default: on)
+- Improve Python 3 reloading compatibility
+
+
 Version 0.2
 -----------
 

@@ -7,8 +7,8 @@ Browse [Hacker News](https://news.ycombinator.com) inside Vim.
 
 ![Hacker News Comments in Vim](https://github.com/ryanss/vim-hackernews/raw/master/screenshots/vim-hackernews-item.png)
 
-Uses [cheeaun's Unofficial Hacker News API](https://github.com/cheeaun/node-hnapi)
-to retrieve home page stories and comments and
+Uses the [official Hacker News Firebase API](https://github.com/HackerNews/API)
+to retrieve stories, items, and comments, and
 [FUCK YEAH MARKDOWN](http://fuckyeahmarkdown.com) for rendering HTML articles
 as text.
 
@@ -35,6 +35,14 @@ Basic Usage
 * Press lowercase `u` to go back
 * Press `Ctrl+r` to go forward
 * Execute the `:bd` command to close and remove the Hacker News buffer
+
+
+Configuration
+-------------
+
+- `g:hackernews_show_progress` (default: 1)
+  - Show short progress messages while fetching stories/items and building
+    comment trees. Set to 0 to silence messages.
 
 
 Enhanced Motions

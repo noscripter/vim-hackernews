@@ -35,6 +35,6 @@ This repo contains a Vim plugin for browsing Hacker News inside Vim. Use this gu
 - Update `doc/hackernews.txt`, `README.md`, and `CHANGES` when behavior or commands change.
 
 ## Security & Configuration Tips
-- External services: API calls hit `node-hnapi` and a markdown service; handle timeouts and errors gracefully.
+- External services: API calls use the official Hacker News Firebase API and a
+  markdown service; handle timeouts and errors gracefully.
 - Compatibility: support both `+python` and `+python3` builds as in current code paths.
-

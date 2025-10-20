@@ -31,7 +31,6 @@ else:
     from urllib2 import urlopen, HTTPError
 
 
-API_URL = "http://node-hnapi.herokuapp.com"  # unused; kept for backward refs
 # Official API (Firebase)
 OFFICIAL_API_URL = "https://hacker-news.firebaseio.com/v0"
 MARKDOWN_URL = "http://fuckyeahmarkdown.com/go/?read=1&u="
@@ -337,12 +336,13 @@ def print_comments(comments, level=0):
 
 
 # -------------------------
-# Official API (fallback)
+# Official API
 # -------------------------
 
-def _notify_api_used(official):
+def _notify_api_used(official=True):
     try:
-        msg = 'HackerNews: using ' + ('Official API' if official else 'Third-party API')
+        # Always official now; keep param for compatibility
+        msg = 'HackerNews: using Official API'
         # Use echomsg so it lands in :messages; avoid breaking redraws
         vim.command("silent! echomsg '%s'" % msg.replace("'", "''"))
     except Exception:
@@ -456,7 +456,7 @@ def _domain(url):
 
 
 def _normalize_story(item):
-    """Normalize an official API item to node-hnapi-like shape."""
+    """Normalize an official API item to the shape expected by the plugin."""
     if not item or item.get('deleted') or item.get('dead'):
         return None
     typ = item.get('type')
@@ -496,7 +496,7 @@ def fetch_official_items(kind):
     feed = mapping.get(kind, 'topstories')
     _progress('Official: fetching %s ids ...' % feed)
     ids = _official_fetch_json('/%s.json' % feed, timeout=8) or []
-    # Limit to avoid long delays; node-hnapi returns ~60 for news/news2
+    # Limit to avoid long delays; news/news2 pages typically list ~60 stories
     limit = 60 if kind in ('news', 'newest', 'best') else 30
     out = []
     total = min(len(ids), limit)
