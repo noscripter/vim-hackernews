@@ -41,8 +41,24 @@ CONFIGURATION
 
 * `g:hackernews_concurrency`
   - Number of parallel requests used when fetching story details from the
-    official API. Default `12`. Increase to speed up on fast networks; lower on
-    slower or rate-limited networks.
+  official API. Default `12`. Increase to speed up on fast networks; lower on
+  slower or rate-limited networks.
+
+
+PERFORMANCE
+
+- Official API returns lists of IDs. The plugin fetches story details in
+  parallel using a small thread pool (default 12) to reduce total latency.
+- Output preserves the original order of the ID list.
+- Progress messages are printed periodically (every ~10 items) if
+  `g:hackernews_show_progress` is enabled.
+- Comment trees are fetched recursively with internal depth/node limits to
+  prevent pathological timeouts on very large threads. Progress for the
+  top-level comment fetch is shown when enabled.
+- Tuning knobs:
+  - `g:hackernews_max_items` caps how many stories are displayed for a list.
+  - `g:hackernews_concurrency` adjusts how many parallel HTTP requests are used.
+  - Reduce these values if you experience timeouts; increase on fast networks.
 
 
 ENHANCED MOTIONS                                *hackernews-motions*

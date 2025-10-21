@@ -62,7 +62,28 @@ Configuration
 
 - `g:hackernews_concurrency`
   - Number of parallel requests when fetching story details from the official
-    API. Default 12.
+  API. Default 12.
+
+
+Performance
+-----------
+
+This plugin uses the official API, which returns lists of story IDs. To keep
+loads fast, vim-hackernews fetches story details in parallel:
+
+- Threaded fetch: a small thread pool (default 12 threads) pulls items by ID.
+  Python threads are appropriate here because HTTP I/O releases the GIL.
+- Ordered output: results are reassembled in the original ID order.
+- Batching feedback: progress messages are printed every 10 items.
+- Tunable limits: `g:hackernews_max_items` controls how many stories are
+  fetched per list; `g:hackernews_concurrency` controls the thread pool size.
+- Comment trees: still fetched recursively, with sensible internal limits to
+  avoid timeouts on very large threads; progress shown for top-level fetches.
+
+Trade-offs:
+- Higher concurrency improves latency on fast networks, but can trip rate caps
+  or saturate slow links. If you see timeouts, lower `g:hackernews_concurrency`
+  or `g:hackernews_max_items`.
 
 
 Demo
