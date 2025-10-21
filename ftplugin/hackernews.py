@@ -357,6 +357,36 @@ def print_comments(comments, level=0):
             print_comments(comment['comments'], level+1)
 
 
+def extract_links():
+    # Collect all http/https links wrapped in brackets: [http...]
+    text = "\n".join(vim.current.buffer[:])
+    urls = re.findall(r"\[(https?://[^\]\s]+)\]", text)
+    seen = set()
+    out = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
+def copy_links():
+    links = extract_links()
+    payload = "\n".join(links)
+    try:
+        setreg = vim.Function('setreg')
+        setreg('+', payload)
+        setreg('*', payload)
+        setreg('"', payload)
+    except Exception:
+        # Fallback to put in unnamed register only
+        try:
+            vim.command("let @@ = '%s'" % payload.replace("'", "''"))
+        except Exception:
+            pass
+    vim.command("silent! echomsg 'HackerNews: copied %d link(s) to clipboard'" % len(links))
+
+
 def _official_fetch_json(path, timeout=8):
     return json.loads(urlopen(OFFICIAL_API_URL + path, timeout=timeout)
                       .read().decode('utf-8'))

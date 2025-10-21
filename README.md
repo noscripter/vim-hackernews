@@ -34,6 +34,14 @@ Basic Usage
 * Execute the `:bd` command to close and remove the Hacker News buffer
 
 
+Extra Commands
+--------------
+
+- `:HackerNewsCopyLinks` — copies all http/https links visible in the current
+  Hacker News buffer to your system clipboard (and unnamed register), one per
+  line.
+
+
 Why the switch to the Official API?
 -----------------------------------
 

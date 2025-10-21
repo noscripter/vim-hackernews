@@ -92,6 +92,8 @@ content is on the screen:
 COMMANDS                                        *hackernews-commands*
 
 :HackerNews             Open Hacker News front page stories in Vim
+:HackerNewsCopyLinks    Copy all http/https links from the current Hacker News
+                        buffer to the system clipboard (and unnamed register)
 
 
 ABOUT                                           *hackernews-about*
