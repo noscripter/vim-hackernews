@@ -61,6 +61,21 @@ PERFORMANCE
   - Reduce these values if you experience timeouts; increase on fast networks.
 
 
+TIPS
+
+- Slow connection / VPN:
+  - `let g:hackernews_max_items = 30`
+  - `let g:hackernews_concurrency = 6`
+
+- Typical Wi‑Fi:
+  - `let g:hackernews_max_items = 60`
+  - `let g:hackernews_concurrency = 12`
+
+- Fast wired / powerful desktop:
+  - `let g:hackernews_max_items = 90`
+  - `let g:hackernews_concurrency = 24`
+
+
 ENHANCED MOTIONS                                *hackernews-motions*
 
 Uppercase `J` and `K` are mapped to helpful new motions based on what type of

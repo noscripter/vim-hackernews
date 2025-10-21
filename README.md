@@ -86,6 +86,29 @@ Trade-offs:
   or `g:hackernews_max_items`.
 
 
+Tuning Tips
+-----------
+
+Use these quick presets in your vimrc based on your environment:
+
+- Slow connection / VPN
+  - `let g:hackernews_max_items = 30`
+  - `let g:hackernews_concurrency = 6`
+
+- Typical laptop on home/office Wi‑Fi
+  - `let g:hackernews_max_items = 60` (default)
+  - `let g:hackernews_concurrency = 12` (default)
+
+- Fast wired network / powerful desktop
+  - `let g:hackernews_max_items = 90`
+  - `let g:hackernews_concurrency = 24`
+
+Notes:
+- If you encounter occasional timeouts, try reducing concurrency first.
+- Increasing the max items will usually have more impact on total time than
+  increasing concurrency.
+
+
 Demo
 ----
 
