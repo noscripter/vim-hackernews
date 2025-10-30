@@ -53,6 +53,7 @@ noremap <buffer> <C-R> :Python hackernews.save_pos()<cr>
 
 " Copy all links in current buffer to clipboard
 command! -buffer HackerNewsCopyLinks Python hackernews.copy_links()
+command! -buffer HackerNewsRefresh Python hackernews.refresh()
 
 
 " Helper motions to browse front page, comments and articles easier

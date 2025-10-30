@@ -14,6 +14,8 @@ Version 0.3-dev
   (`g:hackernews_max_items`).
   Implementation: a bounded worker pool fetches item JSON concurrently, results
   are reassembled in order, and periodic progress messages are emitted.
+- Prefer Vim's Python 3 provider when available to improve TLS reliability
+- Add `:HackerNewsRefresh` command to clear and refetch the active story list
 - Improve Python 3 reloading compatibility
 - Update docs to reflect supported lists (top, ask, show, jobs, best, newest)
   and remove references to deprecated lists (active, shownew, noobstories)

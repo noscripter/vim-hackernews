@@ -37,6 +37,8 @@ Basic Usage
 Extra Commands
 --------------
 
+- `:HackerNewsRefresh` — clears the current Hacker News buffer and refetches
+  the active list from the official API.
 - `:HackerNewsCopyLinks` — copies all http/https links visible in the current
   Hacker News buffer to your system clipboard (and unnamed register), one per
   line.

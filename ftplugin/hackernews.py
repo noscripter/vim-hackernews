@@ -92,13 +92,16 @@ def _progress(msg):
         pass
 
 
-def main():
-    stories = vim.eval("g:hackernews_stories") or "news"
-    vim.command("edit %s.hackernews" % (stories if stories != "news" else ""))
+def _load_frontpage(stories, reuse_buffer=False):
+    bufname = "%s.hackernews" % (stories if stories != "news" else "")
+    if reuse_buffer:
+        vim.current.buffer[:] = ['']
+        vim.command("setlocal filetype=hackernews")
+    else:
+        vim.command("edit %s" % bufname)
     vim.command("setlocal noswapfile")
     vim.command("setlocal buftype=nofile")
-
-    if vim.eval("changenr()") == "1":
+    if reuse_buffer or vim.eval("changenr()") == "1":
         vim.command("setlocal undolevels=-1")
 
     bwrite("┌───┐")
@@ -145,6 +148,16 @@ def main():
             bwrite(line)
         bwrite("")
     vim.command("setlocal undolevels=100")
+
+
+def main():
+    stories = vim.eval("g:hackernews_stories") or "news"
+    _load_frontpage(stories, reuse_buffer=False)
+
+
+def refresh():
+    stories = vim.eval("g:hackernews_stories") or "news"
+    _load_frontpage(stories, reuse_buffer=True)
 
 
 def link(external=False):
