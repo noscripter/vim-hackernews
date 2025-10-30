@@ -179,8 +179,15 @@ NeoBundle 'ryanss/vim-hackernews'
 Running Tests
 -------------
 
+Vim integration tests use [Vader.vim](https://github.com/junegunn/vader.vim).
+
 ```bash
-$ vim -c Vader! tests.vader
+$ git clone https://github.com/junegunn/vader.vim
+$ vim -Nu NONE \
+      -c 'set rtp+=./vader.vim' \
+      -c 'set rtp+=.' \
+      -c 'Vader! tests.vader' \
+      -c 'qa!'
 ```
 
 Python unit tests (no Vim required):
