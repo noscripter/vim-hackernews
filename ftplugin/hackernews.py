@@ -92,37 +92,13 @@ def _progress(msg):
         pass
 
 
-def _load_frontpage(stories, reuse_buffer=False):
-    bufname = "%s.hackernews" % (stories if stories != "news" else "")
-    if reuse_buffer:
-        vim.current.buffer[:] = ['']
-        vim.command("setlocal filetype=hackernews")
-    else:
-        vim.command("edit %s" % bufname)
-    vim.command("setlocal noswapfile")
-    vim.command("setlocal buftype=nofile")
-    if reuse_buffer or vim.eval("changenr()") == "1":
-        vim.command("setlocal undolevels=-1")
-
+def _render_frontpage(items):
+    vim.command("setlocal filetype=hackernews")
+    vim.current.buffer[:] = ['']
     bwrite("┌───┐")
     bwrite("│ Y │ Hacker News (news.ycombinator.com)")
     bwrite("└───┘")
     bwrite("")
-
-    _progress('Loading stories (Official API) ...')
-    try:
-        items = fetch_official_items(stories)
-    except Exception:
-        e = sys.exc_info()[1]
-        msg = getattr(e, 'reason', None)
-        if msg:
-            print("HackerNews.vim Error: %s" % str(msg))
-        else:
-            print("HackerNews.vim Error: HTTP Request Timeout")
-        return
-
-    _notify_api_used()
-    _progress('Loaded %d stories' % len(items))
 
     for i, item in enumerate(items):
         if 'title' not in item:
@@ -147,6 +123,34 @@ def _load_frontpage(stories, reuse_buffer=False):
             line %= (" "*4, item.get('time_ago', ''), item['id'])
             bwrite(line)
         bwrite("")
+
+
+def _load_frontpage(stories, reuse_buffer=False):
+    bufname = "%s.hackernews" % (stories if stories != "news" else "")
+    if not reuse_buffer:
+        vim.command("edit %s" % bufname)
+    vim.command("setlocal noswapfile")
+    vim.command("setlocal buftype=nofile")
+    if reuse_buffer or vim.eval("changenr()") == "1":
+        vim.command("setlocal undolevels=-1")
+
+    _progress('Loading stories (Official API) ...')
+    try:
+        items = fetch_official_items(stories)
+    except Exception:
+        e = sys.exc_info()[1]
+        msg = getattr(e, 'reason', None)
+        if msg:
+            print("HackerNews.vim Error: %s" % str(msg))
+        else:
+            print("HackerNews.vim Error: HTTP Request Timeout")
+        vim.command("setlocal undolevels=100")
+        return
+
+    _notify_api_used()
+    _progress('Loaded %d stories' % len(items))
+
+    _render_frontpage(items)
     vim.command("setlocal undolevels=100")
 
 
