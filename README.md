@@ -183,6 +183,34 @@ Running Tests
 $ vim -c Vader! tests.vader
 ```
 
+Python unit tests (no Vim required):
+
+1. Create and activate a virtual environment (recommended by macOS/Homebrew):
+
+   ```bash
+   $ python3 -m venv .venv
+   $ source .venv/bin/activate
+   ```
+
+2. Bring the tools in via pip:
+
+   ```bash
+   (.venv) $ python -m pip install pytest coverage
+   ```
+
+3. Run the Python unit tests (no Vim required):
+
+   ```bash
+   (.venv) $ pytest tests/test_hackernews.py
+   ```
+
+4. Generate a coverage report for the Python module:
+
+   ```bash
+   (.venv) $ coverage run -m pytest tests/test_hackernews.py
+   (.venv) $ coverage report
+   ```
+
 
 Contributions
 -------------
