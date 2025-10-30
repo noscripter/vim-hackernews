@@ -9,16 +9,13 @@ Version: 0.3-dev
 BASIC USAGE                                     *hackernews-usage*
 
 * Open the Hacker News front page in Vim by executing the `:HackerNews` command
-* The HackerNews command takes an optional parameter to view items other
+* The HackerNews command takes an optional parameter to view lists other
   than the top stories on the front page:
     * `:HackerNews ask`
     * `:HackerNews show`
-    * `:HackerNews shownew`
     * `:HackerNews jobs`
     * `:HackerNews best`
-    * `:HackerNews active`
     * `:HackerNews newest`
-    * `:HackerNews noobstories`
 * Press lowercase `o` to open links in Vim
 * Press uppercase `O` to open links in default web browser
 * Numbered lines with story titles on the front page link to the story url
@@ -27,6 +24,56 @@ BASIC USAGE                                     *hackernews-usage*
 * Press lowercase `u` to go back
 * Press `Ctrl+r` to go forward
 * Execute the `:bd` command to close and remove the Hacker News buffer
+
+
+CONFIGURATION
+
+* `g:hackernews_show_progress`
+  - When set to `1` (default), the plugin shows short progress messages while
+    fetching stories/items and building comment trees. Messages appear in the
+    command area and in `:messages`.
+  - Set to `0` to silence progress messages.
+
+* `g:hackernews_max_items`
+  - Maximum number of stories fetched for the current list. Defaults to `60`
+    for `news/newest/best` and `30` for others. Set to a lower value if your
+    connection is slow, or a higher value if you want more items.
+
+* `g:hackernews_concurrency`
+  - Number of parallel requests used when fetching story details from the
+  official API. Default `12`. Increase to speed up on fast networks; lower on
+  slower or rate-limited networks.
+
+
+PERFORMANCE
+
+- Official API returns lists of IDs. The plugin fetches story details in
+  parallel using a small thread pool (default 12) to reduce total latency.
+- Output preserves the original order of the ID list.
+- Progress messages are printed periodically (every ~10 items) if
+  `g:hackernews_show_progress` is enabled.
+- Comment trees are fetched recursively with internal depth/node limits to
+  prevent pathological timeouts on very large threads. Progress for the
+  top-level comment fetch is shown when enabled.
+- Tuning knobs:
+  - `g:hackernews_max_items` caps how many stories are displayed for a list.
+  - `g:hackernews_concurrency` adjusts how many parallel HTTP requests are used.
+  - Reduce these values if you experience timeouts; increase on fast networks.
+
+
+TIPS
+
+- Slow connection / VPN:
+  - `let g:hackernews_max_items = 30`
+  - `let g:hackernews_concurrency = 6`
+
+- Typical Wi‑Fi:
+  - `let g:hackernews_max_items = 60`
+  - `let g:hackernews_concurrency = 12`
+
+- Fast wired / powerful desktop:
+  - `let g:hackernews_max_items = 90`
+  - `let g:hackernews_concurrency = 24`
 
 
 ENHANCED MOTIONS                                *hackernews-motions*
@@ -45,6 +92,10 @@ content is on the screen:
 COMMANDS                                        *hackernews-commands*
 
 :HackerNews             Open Hacker News front page stories in Vim
+:HackerNewsRefresh      Clear the current Hacker News buffer and refetch the
+                        active list from the official API
+:HackerNewsCopyLinks    Copy all http/https links from the current Hacker News
+                        buffer to the system clipboard (and unnamed register)
 
 
 ABOUT                                           *hackernews-about*
@@ -52,3 +103,9 @@ ABOUT                                           *hackernews-about*
 Grab the latest version or report a bug on GitHub:
 
 https://github.com/ryanss/vim-hackernews
+
+Network notes:
+- The plugin uses the official Hacker News Firebase API for all requests
+  (stories, items, comments). This removes the dependency on third-party
+  services and improves reliability. Fetching comment trees may take longer
+  than story lists due to the number of requests involved.

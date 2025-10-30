@@ -9,15 +9,22 @@
 #  License: MIT (see LICENSE file)
 #  Version: 0.3-dev
 
-
 from __future__ import print_function
 import binascii
 import json
 import re
 import textwrap
+import time
 import vim
 import webbrowser
 import sys
+import threading
+
+if sys.version_info >= (3, 0):
+    from queue import Queue
+else:
+    from Queue import Queue
+
 if sys.version_info >= (3, 0):
     from html.parser import HTMLParser
     from urllib.request import urlopen
@@ -29,7 +36,8 @@ else:
     from urllib2 import urlopen, HTTPError
 
 
-API_URL = "http://node-hnapi.herokuapp.com"
+# Official API (Firebase)
+OFFICIAL_API_URL = "https://hacker-news.firebaseio.com/v0"
 MARKDOWN_URL = "http://fuckyeahmarkdown.com/go/?read=1&u="
 
 html = HTMLParser()
@@ -66,36 +74,31 @@ def hex(s):
     return binascii.hexlify(s)
 
 
-def main():
-    stories = vim.eval("g:hackernews_stories") or "news"
-    vim.command("edit %s.hackernews" % (stories if stories != "news" else ""))
-    vim.command("setlocal noswapfile")
-    vim.command("setlocal buftype=nofile")
+def _notify_api_used():
+    try:
+        vim.command("silent! echomsg 'HackerNews: using Official API'")
+    except Exception:
+        pass
 
-    if vim.eval("changenr()") == "1":
-        vim.command("setlocal undolevels=-1")
 
+def _progress(msg):
+    try:
+        if str(vim.eval("get(g:, 'hackernews_show_progress', 1)")) == '0':
+            return
+        msg = 'HackerNews: ' + msg
+        vim.command("echo '%s'" % msg.replace("'", "''"))
+        vim.command("redraw")
+    except Exception:
+        pass
+
+
+def _render_frontpage(items):
+    vim.command("setlocal filetype=hackernews")
+    vim.current.buffer[:] = ['']
     bwrite("┌───┐")
     bwrite("│ Y │ Hacker News (news.ycombinator.com)")
     bwrite("└───┘")
     bwrite("")
-
-    try:
-        if stories == "news":
-            news1 = json.loads(urlopen(API_URL+"/news", timeout=5)
-                               .read().decode('utf-8'))
-            news2 = json.loads(urlopen(API_URL+"/news2", timeout=5)
-                               .read().decode('utf-8'))
-            items = news1 + news2
-        else:
-            items = json.loads(urlopen(API_URL+"/"+stories, timeout=5)
-                               .read().decode('utf-8'))
-    except HTTPError:
-        print("HackerNews.vim Error: %s" % str(sys.exc_info()[1].reason))
-        return
-    except:
-        print("HackerNews.vim Error: HTTP Request Timeout")
-        return
 
     for i, item in enumerate(items):
         if 'title' not in item:
@@ -103,7 +106,7 @@ def main():
         if 'domain' in item:
             line = "%s%d. %s (%s) [%s]%s"
             line %= (" " if i+1 < 10 else "", i+1, item['title'],
-                     item['domain'], item['url'], unichr(160))
+                     item['domain'], item.get('url', ''), unichr(160))
             bwrite(line)
         else:
             line = "%s%d. %s [%d]"
@@ -111,15 +114,54 @@ def main():
             bwrite(line)
         if item['type'] in ("link", "ask"):
             line = "%s%d points by %s %s | %d comments [%s]"
-            line %= (" "*4, item['points'], item['user'], item['time_ago'],
-                     item['comments_count'], str(item['id']))
+            line %= (" "*4, item.get('points', 0), item.get('user', '???'),
+                     item.get('time_ago', ''), item.get('comments_count', 0),
+                     str(item['id']))
             bwrite(line)
         elif item['type'] == "job":
             line = "%s%s [%d]"
-            line %= (" "*4, item['time_ago'], item['id'])
+            line %= (" "*4, item.get('time_ago', ''), item['id'])
             bwrite(line)
         bwrite("")
+
+
+def _load_frontpage(stories, reuse_buffer=False):
+    bufname = "%s.hackernews" % (stories if stories != "news" else "")
+    if not reuse_buffer:
+        vim.command("edit %s" % bufname)
+    vim.command("setlocal noswapfile")
+    vim.command("setlocal buftype=nofile")
+    if reuse_buffer or vim.eval("changenr()") == "1":
+        vim.command("setlocal undolevels=-1")
+
+    _progress('Loading stories (Official API) ...')
+    try:
+        items = fetch_official_items(stories)
+    except Exception:
+        e = sys.exc_info()[1]
+        msg = getattr(e, 'reason', None)
+        if msg:
+            print("HackerNews.vim Error: %s" % str(msg))
+        else:
+            print("HackerNews.vim Error: HTTP Request Timeout")
+        vim.command("setlocal undolevels=100")
+        return
+
+    _notify_api_used()
+    _progress('Loaded %d stories' % len(items))
+
+    _render_frontpage(items)
     vim.command("setlocal undolevels=100")
+
+
+def main():
+    stories = vim.eval("g:hackernews_stories") or "news"
+    _load_frontpage(stories, reuse_buffer=False)
+
+
+def refresh():
+    stories = vim.eval("g:hackernews_stories") or "news"
+    _load_frontpage(stories, reuse_buffer=True)
 
 
 def link(external=False):
@@ -172,9 +214,9 @@ def link(external=False):
             browser.open("https://news.ycombinator.com/item?id="+item_id)
             return
         try:
-            item = json.loads(urlopen(API_URL+"/item/"+item_id,
-                              timeout=5).read().decode('utf-8'))
-        except:
+            _progress('Loading item %s (Official API) ...' % item_id)
+            item = fetch_official_item(item_id)
+        except Exception:
             print("HackerNews.vim Error: HTTP Request Timeout")
             return
         save_pos()
@@ -188,20 +230,21 @@ def link(external=False):
             if item.get('comments_count', None) is not None \
                     and item['type'] != "job":
                 bwrite("%d points by %s %s | %d comments"
-                       % (item['points'], item['user'], item['time_ago'],
-                          item['comments_count']))
+                       % (item.get('points', 0), item.get('user', '???'),
+                          item.get('time_ago', ''), item.get('comments_count', 0)))
             else:
-                bwrite(item['time_ago'])
+                bwrite(item.get('time_ago', ''))
             if 'url' in item and item['url'].find(item_id) < 0:
                 bwrite("[%s]" % item['url'])
             else:
                 bwrite("[http://news.ycombinator.com/item?id=%s]" % item_id)
             if 'content' in item:
                 bwrite("")
+                bwrite("")
                 print_comments([dict(content=item['content'])])
             if 'poll' in item:
                 bwrite("")
-                max_score = max((c['points'] for c in item['poll']))
+                max_score = max((c['points'] for c in item['poll'])) or 1
                 for c in item['poll']:
                     bwrite("%s (%d points)"
                            % (html.unescape(c['item']), c['points']))
@@ -210,17 +253,17 @@ def link(external=False):
                     bwrite("")
             bwrite("")
             bwrite("")
-        if item['type'] == "comment":
+        if item.get('type') == "comment":
             item['level'] = 0
             print_comments([item])
         else:
-            print_comments(item['comments'])
+            print_comments(item.get('comments', []))
         # Prevent syntax issues in long comment threads with code blocks
         vim.command("syntax sync fromstart")
         # Highlight OP username in comment titles
         if 'level' not in item:
             vim.command("syntax clear Question")
-        vim.command("syntax match Question /%s/ contained" % item['user'])
+        vim.command("syntax match Question /%s/ contained" % item.get('user', ''))
 
     elif url:
         if external:
@@ -233,10 +276,11 @@ def link(external=False):
         except HTTPError:
             print("HackerNews.vim Error: %s" % str(sys.exc_info()[1][0]))
             return
-        except:
+        except Exception:
             print("HackerNews.vim Error: HTTP Request Timeout")
             return
-        content = re.sub(r"(http\S+?)([\<\>\s\n])", "[\g<1>]\g<2>", content)
+        # Wrap plain URLs as [http...] to match buffer link detection
+        content = re.sub(r"(http\S+?)([<>\s\n])", r"[\g<1>]\g<2>", content)
         save_pos()
         vim.command("set syntax=markdown")
         del vim.current.buffer[:]
@@ -272,7 +316,7 @@ def print_comments(comments, level=0):
             # This is a comment (not content) so add comment header
             bwrite("%sComment by %s %s: [%s]"
                    % (" "*level*4, comment.get('user', '???'),
-                      comment['time_ago'], comment['id']))
+                      comment.get('time_ago', ''), comment.get('id', 0)))
         if not comment.get('content', False):
             bwrite("")
             bwrite("")
@@ -286,9 +330,10 @@ def print_comments(comments, level=0):
             # Extract code block before textwrap to conserve whitespace
             code = None
             if p.find("<code>") >= 0:
-                m = re.search("<pre><code>([\S\s]*?)</code></pre>", p)
-                code = m.group(1)
-                p = p.replace(m.group(0), "!CODE!")
+                m = re.search(r"<pre><code>([\S\s]*?)</code></pre>", p)
+                if m:
+                    code = m.group(1)
+                    p = p.replace(m.group(0), "!CODE!")
 
             # Convert <a href="http://url/">Text</a> tags
             # to markdown equivalent: (Text)[http://url/]
@@ -313,7 +358,7 @@ def print_comments(comments, level=0):
                                      initial_indent=" "*4*level,
                                      subsequent_indent=" "*4*level)
             for line in contents:
-                if line.find("!CODE!") >= 0:
+                if line.find("!CODE!") >= 0 and code is not None:
                     bwrite(unichr(160))
                     for c in code.split("\n"):
                         if c.strip():
@@ -327,3 +372,252 @@ def print_comments(comments, level=0):
         bwrite("")
         if 'comments' in comment:
             print_comments(comment['comments'], level+1)
+
+
+def extract_links():
+    # Collect all http/https links wrapped in brackets: [http...]
+    text = "\n".join(vim.current.buffer[:])
+    urls = re.findall(r"\[(https?://[^\]\s]+)\]", text)
+    seen = set()
+    out = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
+def copy_links():
+    links = extract_links()
+    payload = "\n".join(links)
+    try:
+        setreg = vim.Function('setreg')
+        setreg('+', payload)
+        setreg('*', payload)
+        setreg('"', payload)
+    except Exception:
+        # Fallback to put in unnamed register only
+        try:
+            vim.command("let @@ = '%s'" % payload.replace("'", "''"))
+        except Exception:
+            pass
+    vim.command("silent! echomsg 'HackerNews: copied %d link(s) to clipboard'" % len(links))
+
+
+def _official_fetch_json(path, timeout=8):
+    return json.loads(urlopen(OFFICIAL_API_URL + path, timeout=timeout)
+                      .read().decode('utf-8'))
+
+
+def _time_ago(ts):
+    try:
+        diff = int(time.time() - int(ts))
+    except Exception:
+        return "just now"
+    units = [
+        (365*24*3600, "year"),
+        (30*24*3600, "month"),
+        (7*24*3600, "week"),
+        (24*3600, "day"),
+        (3600, "hour"),
+        (60, "minute"),
+    ]
+    for seconds, name in units:
+        if diff >= seconds:
+            val = int(diff / seconds)
+            return "%d %s%s ago" % (val, name, "s" if val != 1 else "")
+    return "%d seconds ago" % max(diff, 0)
+
+
+def _domain(url):
+    try:
+        if sys.version_info >= (3, 0):
+            from urllib.parse import urlparse
+        else:
+            from urlparse import urlparse
+        host = urlparse(url).netloc or ""
+        return host[4:] if host.startswith("www.") else host
+    except Exception:
+        return None
+
+
+def _normalize_story(item):
+    """Normalize an official API item to the shape expected by the plugin."""
+    if not item or item.get('deleted') or item.get('dead'):
+        return None
+    typ = item.get('type')
+    story = {
+        'id': item.get('id'),
+        'title': item.get('title', ''),
+        'user': item.get('by', '???'),
+        'time_ago': _time_ago(item.get('time', time.time())),
+        'points': item.get('score', 0),
+        'comments_count': item.get('descendants', 0),
+    }
+    url = item.get('url')
+    if url:
+        story['url'] = url
+        d = _domain(url)
+        if d:
+            story['domain'] = d
+    # Map types to plugin expectations
+    if typ == 'job':
+        story['type'] = 'job'
+    elif typ == 'poll':
+        story['type'] = 'ask'
+    else:
+        story['type'] = 'link' if url else 'ask'
+    return story
+
+
+def fetch_official_items(kind):
+    mapping = {
+        'news': 'topstories',
+        'newest': 'newstories',
+        'best': 'beststories',
+        'show': 'showstories',
+        'ask': 'askstories',
+        'jobs': 'jobstories',
+    }
+    feed = mapping.get(kind, 'topstories')
+    _progress('Official: fetching %s ids ...' % feed)
+    ids = _official_fetch_json('/%s.json' % feed, timeout=8) or []
+    # Limit to avoid long delays; default mirrors prior behavior
+    default_limit = 60 if kind in ('news', 'newest', 'best') else 30
+    try:
+        user_limit = int(vim.eval("get(g:, 'hackernews_max_items', %d)" % default_limit))
+    except Exception:
+        user_limit = default_limit
+    limit = max(1, min(user_limit, len(ids)))
+    total = limit
+    if total:
+        _progress('Official: fetching %d items ...' % total)
+    return _parallel_fetch_items(ids, limit)
+
+
+def _parallel_fetch_items(ids, limit):
+    try:
+        concurrency = int(vim.eval("get(g:, 'hackernews_concurrency', 12)"))
+    except Exception:
+        concurrency = 12
+    concurrency = max(1, min(concurrency, 64))
+
+    q = Queue()
+    results = [None] * limit
+    lock = threading.Lock()
+    done = [0]
+
+    def worker():
+        while True:
+            item = q.get()
+            if item is None:
+                q.task_done()
+                return
+            i, iid = item
+            norm = None
+            try:
+                itm = _official_fetch_json('/item/%d.json' % int(iid), timeout=8)
+                norm = _normalize_story(itm)
+            except Exception:
+                norm = None
+            results[i] = norm
+            with lock:
+                done[0] += 1
+                if done[0] % 10 == 0:
+                    _progress('Official: fetched %d/%d items ...' % (done[0], limit))
+            q.task_done()
+
+    threads = []
+    for _ in range(min(concurrency, limit)):
+        t = threading.Thread(target=worker)
+        t.daemon = True
+        t.start()
+        threads.append(t)
+
+    for i, iid in enumerate(ids[:limit]):
+        q.put((i, iid))
+    # Add sentinels
+    for _ in threads:
+        q.put(None)
+    q.join()
+    # Assemble in original order, dropping missing
+    return [r for r in results if r]
+
+
+def _build_comments(ids, depth=0, depth_limit=6, node_budget=None):
+    # node_budget is [count, max] mutable to track across recursion
+    if node_budget is None:
+        node_budget = [0, 200]
+    comments = []
+    if not ids:
+        return comments
+    if depth > depth_limit:
+        return comments
+    if depth == 0:
+        _progress('Official: fetching comments ...')
+    for cid in ids:
+        if node_budget[0] >= node_budget[1]:
+            break
+        try:
+            c = _official_fetch_json('/item/%d.json' % int(cid), timeout=8)
+        except Exception:
+            continue
+        if not c or c.get('deleted') or c.get('dead'):
+            continue
+        node_budget[0] += 1
+        comment = {
+            'id': c.get('id'),
+            'user': c.get('by', '???'),
+            'time_ago': _time_ago(c.get('time', time.time())),
+            'content': c.get('text', '') or '',
+        }
+        kids = c.get('kids') or []
+        if kids:
+            comment['comments'] = _build_comments(
+                kids, depth+1, depth_limit, node_budget
+            )
+        comments.append(comment)
+        if depth == 0 and node_budget[0] % 20 == 0:
+            _progress('Official: fetched %d comments ...' % node_budget[0])
+    return comments
+
+
+def fetch_official_item(item_id):
+    try:
+        iid = int(item_id)
+    except Exception:
+        iid = item_id
+    item = _official_fetch_json('/item/%d.json' % int(iid), timeout=8)
+    if not item:
+        return {}
+    # If this is a comment, normalize minimal fields for print_comments
+    if item.get('type') == 'comment':
+        return {
+            'type': 'comment',
+            'id': item.get('id'),
+            'user': item.get('by', '???'),
+            'time_ago': _time_ago(item.get('time', time.time())),
+            'content': item.get('text', '') or '',
+        }
+
+    norm = _normalize_story(item) or {}
+    # Build poll options if any
+    parts = item.get('parts') or []
+    if parts:
+        poll = []
+        for pid in parts:
+            try:
+                po = _official_fetch_json('/item/%d.json' % int(pid),
+                                          timeout=8)
+            except Exception:
+                continue
+            if not po:
+                continue
+            poll.append({'item': po.get('text', '') or '',
+                         'points': po.get('score', 0)})
+        if poll:
+            norm['poll'] = poll
+    # Build comments tree
+    kids = item.get('kids') or []
+    norm['comments'] = _build_comments(kids)
+    return norm

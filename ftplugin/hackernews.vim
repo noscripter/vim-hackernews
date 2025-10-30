@@ -8,10 +8,10 @@
 "  Version: 0.3-dev
 
 
-if has('python')
-    command! -nargs=1 Python python <args>
-elseif has('python3')
+if has('python3')
     command! -nargs=1 Python python3 <args>
+elseif has('python')
+    command! -nargs=1 Python python <args>
 else
     echo "HackerNews.vim Error: Requires Vim compiled with +python or +python3"
     finish
@@ -26,9 +26,14 @@ Python << EOF
 if 'hackernews' not in sys.modules:
     import hackernews
 else:
-    import imp
     # Reload python module to avoid errors when updating plugin
-    hackernews = imp.reload(hackernews)
+    try:
+        import importlib
+        hackernews = importlib.reload(sys.modules['hackernews'])
+    except Exception:
+        # Fallback for very old Python versions
+        import imp
+        hackernews = imp.reload(sys.modules['hackernews'])
 EOF
 
 
@@ -45,6 +50,10 @@ noremap <buffer> u :Python hackernews.save_pos()<cr>
 noremap <buffer> <C-R> :Python hackernews.save_pos()<cr>
                        \<C-R>
                        \:Python hackernews.recall_pos()<cr>
+
+" Copy all links in current buffer to clipboard
+command! -buffer HackerNewsCopyLinks Python hackernews.copy_links()
+command! -buffer HackerNewsRefresh Python hackernews.refresh()
 
 
 " Helper motions to browse front page, comments and articles easier

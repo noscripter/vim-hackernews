@@ -24,6 +24,21 @@ if !exists("g:hackernews_marks")
     let g:hackernews_marks = {}
 endif
 
+" Show progress messages during network requests
+if !exists("g:hackernews_show_progress")
+    let g:hackernews_show_progress = 1
+endif
+
+" Tuning: number of items and concurrency for official API fetches
+if !exists("g:hackernews_max_items")
+    let g:hackernews_max_items = 60
+endif
+if !exists("g:hackernews_concurrency")
+    let g:hackernews_concurrency = 12
+endif
+
+" The plugin always uses the official HN API (Firebase)
+
 
 function! HackerNews(...)
     if a:0 > 0

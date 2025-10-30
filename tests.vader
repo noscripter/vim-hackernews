@@ -76,6 +76,17 @@ Expect (Keys Mapped):
      u           *@:Python hackernews.save_pos()<CR>u:Python hackernews.recall_pos()<CR>
      <C-R>       *@:Python hackernews.save_pos()<CR><C-R>:Python hackernews.recall_pos()<CR>
 
+Do (Test HackerNewsRefresh command):
+  :HackerNews\<cr>
+  gg
+  ccTemporary change\<esc>
+  :HackerNewsRefresh\<cr>
+
+Then (Refresh repopulates front page):
+  AssertEqual getline(1), '┌───┐'
+  AssertEqual getline(2), '│ Y │ Hacker News (news.ycombinator.com)'
+  AssertEqual getline(3), '└───┘'
+
 Do (Test opening link item w/ url):
   :HackerNews\<cr>
   cc[9015621]\<esc>o
